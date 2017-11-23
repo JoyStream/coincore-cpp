@@ -1119,6 +1119,51 @@ string OutPoint::toIndentedString(uint spaces) const
 
 ///////////////////////////////////////////////////////////////////////////////
 //
+// class ScriptWitness implementation
+//
+uint64_t ScriptWitness::getSize() const
+{
+    uint64_t rval = VarInt(stack.size()).getSize();
+    for (auto& item: stack)
+    {
+        rval += VarInt(item.size()).getSize();
+        rval += item.size();
+    }
+    return rval;
+}
+
+uchar_vector ScriptWitness::getSerialized() const
+{
+    uchar_vector rval = VarInt(stack.size()).getSerialized();
+    for (auto& item: stack)
+    {
+        rval += VarInt(item.size()).getSerialized();
+        rval += item;
+    }
+    return rval;
+    
+}
+
+void ScriptWitness::setSerialized(const uchar_vector& bytes)
+{
+    clear();
+
+    VarInt count(bytes);
+    uint pos = count.getSize();
+    for (uint i = 0; i < count.value; i++)
+    {
+        VarInt size(uchar_vector(bytes.begin() + pos, bytes.end())); pos += size.getSize();
+        if (bytes.size() < pos + size.value)
+            throw runtime_error("Invalid data - ScriptWitness parse error");
+
+        uchar_vector item;
+        item.assign(bytes.begin() + pos, bytes.begin() + pos + size.value); pos += size.value;
+        stack.push_back(item);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//
 // class TxIn implementation
 //
 TxIn::TxIn(const OutPoint& previousOut, const string& scriptSigHex, uint32_t sequence)
@@ -1307,40 +1352,115 @@ Transaction::Transaction(const string& hex)
     this->setSerialized(bytes);
 }
 
-uint64_t Transaction::getSize() const
+const uchar_vector& Transaction::getHash(bool bWithWitness) const
 {
+    hash_ = sha256_2(getSerialized(bWithWitness));
+    return hash_;
+}
+
+const uchar_vector& Transaction::getHashLittleEndian(bool bWithWitness) const
+{
+    hashLittleEndian_ = sha256_2(getSerialized(bWithWitness)).getReverse();
+    return hashLittleEndian_;
+}
+
+const uchar_vector& Transaction::getHash(hashfunc_t hashfunc, bool bWithWitness) const
+{
+    hash_ = hashfunc(getSerialized(bWithWitness));
+    return hash_;
+}
+
+const uchar_vector& Transaction::getHashLittleEndian(hashfunc_t hashfunc, bool bWithWitness) const
+{
+    hashLittleEndian_ = hash_.getReverse();
+    return hashLittleEndian_;
+}
+
+uint32_t Transaction::getChecksum() const
+{
+    getHash(true);
+    return vch_to_uint<uint32_t>(uchar_vector(hash_.begin(), hash_.begin() + 4), LITTLE_ENDIAN_);
+}
+
+uint64_t Transaction::getSize(bool bWithWitness) const
+{
+    bWithWitness = bWithWitness && hasWitness();
+
     uint64_t count = 8; // version + locktime
-    count += VarInt(this->inputs.size()).getSize();
-    count += VarInt(this->outputs.size()).getSize();
+    count += VarInt(inputs.size()).getSize();
+    count += VarInt(outputs.size()).getSize();
 
     uint64_t i;
-    for (i = 0; i < this->inputs.size(); i++)
-        count += this->inputs[i].getSize();
+    for (i = 0; i < inputs.size(); i++)
+        count += inputs[i].getSize();
 
-    for (i = 0; i < this->outputs.size(); i++)
-        count += this->outputs[i].getSize();
+    for (i = 0; i < outputs.size(); i++)
+        count += outputs[i].getSize();
+
+    if (bWithWitness)
+    {
+        count += 2; // mask + flags
+        for (auto& input: inputs) { count += input.scriptWitness.getSize(); }
+    }
 
     return count;
 }
 
-uchar_vector Transaction::getSerialized(bool includeScriptSigLength) const
+uint64_t Transaction::getVSize() const
 {
-    // version
-    uchar_vector rval = uint_to_vch(this->version, LITTLE_ENDIAN_);
+    uint64_t count = 8; // version + locktime
+    count += VarInt(inputs.size()).getSize();
+    count += VarInt(outputs.size()).getSize();
 
     uint64_t i;
+    for (i = 0; i < inputs.size(); i++)
+        count += inputs[i].getSize();
+
+    for (i = 0; i < outputs.size(); i++)
+        count += outputs[i].getSize();
+
+    if (hasWitness())
+    {
+//        count += 2; // mask + flags
+        uint64_t witnessCount = 0;
+        for (auto& input: inputs) { witnessCount += input.scriptWitness.getSize(); }
+        count += (witnessCount + 3) / 4;
+    }
+
+    return count;
+}
+uchar_vector Transaction::getSerialized(bool bWithWitness) const
+{
+    bWithWitness = bWithWitness && hasWitness();
+
+    // version
+    uchar_vector rval = uint_to_vch(version, LITTLE_ENDIAN_);
+
+    if (bWithWitness)
+    {
+        // mask
+        rval.push_back(0x00);
+
+        // flags
+        rval.push_back(0x01);
+    }
+
     // inputs
-    rval += VarInt(this->inputs.size()).getSerialized();
-    for (i = 0; i < this->inputs.size(); i++)
-        rval += this->inputs[i].getSerialized(includeScriptSigLength);
+    rval += VarInt(inputs.size()).getSerialized();
+    for (auto& input: inputs) { rval += input.getSerialized(); }
 
     // outputs
-    rval += VarInt(this->outputs.size()).getSerialized();
-    for (i = 0; i < this->outputs.size(); i++)
-        rval += this->outputs[i].getSerialized();
+    rval += VarInt(outputs.size()).getSerialized();
+    for (auto& output: outputs) { rval += output.getSerialized(); }
+
+    if (bWithWitness)
+    {
+        // witness
+        for (auto& input: inputs) { rval += input.scriptWitness.getSerialized(); }
+    }
 
     // lock time
-    rval += uint_to_vch(this->lockTime, LITTLE_ENDIAN_);
+    rval += uint_to_vch(lockTime, LITTLE_ENDIAN_);
 
     return rval;
 }
@@ -1353,11 +1473,23 @@ void Transaction::setSerialized(const uchar_vector& bytes)
     // version
     this->version = vch_to_uint<uint32_t>(uchar_vector(bytes.begin(), bytes.begin() + 4), LITTLE_ENDIAN_);
 
-    uint64_t i;
+    uint pos = 4;
+
+    int flags = 0;
+    if (bytes[pos] == 0)
+    {
+        // witness serialization
+        pos++;
+        flags = bytes[pos++];
+        if (flags != 1)
+            throw runtime_error("Invalid data - unrecognized flags");
+    }
+
     // inputs
     this->inputs.clear();
-    VarInt count(uchar_vector(bytes.begin() + 4, bytes.end()));
-    uint pos = count.getSize() + 4;
+    VarInt count(uchar_vector(bytes.begin() + pos, bytes.end()));
+    pos += count.getSize();
+    uint64_t i;
     for (i = 0; i < count.value; i++) {
         TxIn txIn(uchar_vector(bytes.begin() + pos, bytes.end()));
         this->addInput(txIn);
@@ -1367,11 +1499,20 @@ void Transaction::setSerialized(const uchar_vector& bytes)
     // outputs
     this->outputs.clear();
     count.setSerialized(uchar_vector(bytes.begin() + pos, bytes.end()));
-    pos = pos + count.getSize();
+    pos += count.getSize();
     for (i = 0; i < count.value; i++) {
         TxOut txOut(uchar_vector(bytes.begin() + pos, bytes.end()));
         this->addOutput(txOut);
         pos += txOut.getSize();
+    }
+
+    if (flags != 0)
+    {
+        for (auto& input: inputs)
+        {
+            input.scriptWitness.setSerialized(uchar_vector(bytes.begin() + pos, bytes.end()));
+            pos += input.scriptWitness.getSize();
+        }
     }
 
     if (bytes.size() < pos + 4)
@@ -1462,6 +1603,74 @@ uint64_t Transaction::getTotalSent() const
 uchar_vector Transaction::getHashWithAppendedCode(uint32_t code) const
 {
     return sha256_2(this->getSerialized() + uint_to_vch(code, LITTLE_ENDIAN_));
+}
+
+uchar_vector Transaction::getSigHash(uint32_t hashType, uint index, const uchar_vector& script, uint64_t value) const
+{
+    if (index >= inputs.size())
+        throw runtime_error("Index out of range.");
+
+    // TODO: Add other hashtype support
+    if (hashType != SIGHASH_ALL)
+        throw runtime_error("Unsupported hash type.");
+
+    if (inputs[index].scriptWitness.isEmpty())
+    {
+        // Old sighash
+        Transaction copy(*this);
+        for (uint i = 0; i < copy.inputs.size(); i++)
+        {
+            if (index == i) { copy.inputs[i].scriptSig = script; }
+            else            { copy.inputs[i].scriptSig.clear();  }
+        }
+        return sha256_2(copy.getSerialized(false) + uint_to_vch(hashType, LITTLE_ENDIAN_));
+    }
+
+    if (hashPrevouts.empty())
+    {
+        uchar_vector ss;
+        for (auto& input: inputs) { ss += input.previousOut.getSerialized(); }
+//        std::cout << "prevouts: " << ss.getHex() << std::endl;
+        hashPrevouts = sha256_2(ss);
+    }
+
+    if (hashSequence.empty())
+    {
+        uchar_vector ss;
+        for (auto& input: inputs) { ss += uint_to_vch(input.sequence, LITTLE_ENDIAN_); }
+//        std::cout << "sequence: " << ss.getHex() << std::endl;
+        hashSequence = sha256_2(ss);
+    }
+
+    if (hashOutputs.empty())
+    {
+        uchar_vector ss;
+        for (auto& output: outputs) { ss += output.getSerialized(); }
+//        std::cout << "outputs: " << ss.getHex() << std::endl;
+        hashOutputs = sha256_2(ss);
+    }
+
+    uchar_vector ss;
+    ss += uint_to_vch(version, LITTLE_ENDIAN_);
+    ss += hashPrevouts;
+    ss += hashSequence;
+    ss += inputs[index].previousOut.getSerialized();
+    ss += VarInt(script.size()).getSerialized();
+    ss += script;
+    ss += uint_to_vch(value, LITTLE_ENDIAN_);
+    ss += uint_to_vch(inputs[index].sequence, LITTLE_ENDIAN_);
+    ss += hashOutputs;
+    ss += uint_to_vch(lockTime, LITTLE_ENDIAN_);
+    ss += uint_to_vch(hashType, LITTLE_ENDIAN_);
+//    std::cout << "data to hash: " << ss.getHex() << std::endl;
+    return sha256_2(ss);
+}
+
+void Transaction::resetSigHash()
+{
+    hashPrevouts.clear();
+    hashSequence.clear();
+    hashOutputs.clear();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2018,7 +2227,7 @@ std::string FilterAddMessage::toIndentedString(uint spaces) const
 //
 PingMessage::PingMessage()
 {
-    nonce = (((uint64_t) rand() <<  0) & 0x00000000FFFFFFFFull) | (((uint64_t) rand() << 32) & 0xFFFFFFFF00000000ull);
+    nonce = 0; // TODO: set to random value
 }
 
 uchar_vector PingMessage::getSerialized() const

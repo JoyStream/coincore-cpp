@@ -89,6 +89,7 @@ enum HashType
     SIGHASH_ALL             = 0x01,
     SIGHASH_NONE            = 0x02,
     SIGHASH_SINGLE          = 0x03,
+    SIGHASH_FORKID          = 0x40,
     SIGHASH_ANYONECANPAY    = 0x80
 };
 
@@ -189,13 +190,13 @@ public:
     NetworkAddress(const uchar_vector& bytes) { this->setSerialized(bytes); }
 
     void set(uint64_t services, const unsigned char ipv6_bytes[], uint16_t port);
-	
+
     const char* getCommand() const { return ""; }
     uint64_t getSize() const { return hasTime ? 30 : 26; }
     uchar_vector getSerialized() const;
     void setSerialized(const uchar_vector& bytes);
 
-    std::string getName() const; 
+    std::string getName() const;
 
     std::string toString() const;
     std::string toIndentedString(uint spaces = 0) const;
@@ -283,7 +284,7 @@ public:
     uint64_t nonce() const { return nonce_; }
     const VarString& subVersion() const { return subVersion_; }
     int32_t startHeight() const { return startHeight_; }
-    bool relay() const { return relay_; } 
+    bool relay() const { return relay_; }
 
     const char* getCommand() const { return "version"; }
     uint64_t getSize() const;
@@ -567,7 +568,7 @@ public:
     void setSerialized(const uchar_vector& bytes);
 
     std::string getTxHash() const { return uchar_vector(this->hash, 32).getHex(); }
-	
+
     std::string toDelimited(const std::string& delimiter) const;
     std::string toString() const;
     std::string toIndentedString(uint spaces = 0) const;
@@ -709,7 +710,7 @@ public:
 
     void addInput(const TxIn& txin) { inputs.push_back(txin); }
     void addOutput(const TxOut& txout) { outputs.push_back(txout); }
-	
+
     uint64_t getTotalSent() const;
 
     uchar_vector getHashWithAppendedCode(uint32_t code) const; // in little endian
@@ -834,11 +835,11 @@ public:
     const uchar_vector& merkleRoot() const { return blockHeader.merkleRoot(); }
     uint32_t timestamp() const { return blockHeader.timestamp(); }
     uint32_t bits() const { return blockHeader.bits(); }
-    uint32_t nonce() const { return blockHeader.nonce(); } 
+    uint32_t nonce() const { return blockHeader.nonce(); }
 
     const BigInt getTarget() const { return blockHeader.getTarget(); }
     const BigInt getWork() const { return blockHeader.getWork(); }
-    
+
     const char* getCommand() const { return "block"; }
     uint64_t getSize() const;
     uchar_vector getSerialized() const;
@@ -854,7 +855,7 @@ public:
     void updateMerkleRoot();
 
     void incrementNonce() { blockHeader.incrementNonce(); }
-	
+
     uint64_t getTotalSent() const;
 
     // Only supported for blocks version 2 or higher.
@@ -884,7 +885,7 @@ public:
     const uchar_vector& merkleRoot() const { return blockHeader.merkleRoot(); }
     uint32_t timestamp() const { return blockHeader.timestamp(); }
     uint32_t bits() const { return blockHeader.bits(); }
-    uint32_t nonce() const { return blockHeader.nonce(); } 
+    uint32_t nonce() const { return blockHeader.nonce(); }
 
     PartialMerkleTree merkleTree() const;
 
@@ -1023,4 +1024,3 @@ public:
 };
 
 } // namespace Coin
-

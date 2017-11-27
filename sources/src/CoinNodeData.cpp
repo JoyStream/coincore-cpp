@@ -1141,7 +1141,7 @@ uchar_vector ScriptWitness::getSerialized() const
         rval += item;
     }
     return rval;
-    
+
 }
 
 void ScriptWitness::setSerialized(const uchar_vector& bytes)
@@ -1208,7 +1208,7 @@ string TxIn::getAddress() const
     // first check if it is coinbase
     if ((uchar_vector(this->previousOut.hash, 32) == g_zero32bytes) &&
         (this->previousOut.index == 0xffffffff)) return "Coinbase";
-	
+
     uint nObjects = 0;
     uint i = 0;
     uint pubkeyBegin = 0;
@@ -1217,7 +1217,7 @@ string TxIn::getAddress() const
         pubkeyBegin = i + 1;
         i += scriptSig[i] + 1;
     }
-	
+
     unsigned char version;
     if (nObjects == 1) return "";
 
@@ -1226,7 +1226,7 @@ string TxIn::getAddress() const
     else version = g_multiSigAddressVersion;
 
     if (scriptSig.size() == 0) return "zero length";
-    else return toBase58Check(ripemd160(sha256(uchar_vector(scriptSig.begin() + pubkeyBegin, scriptSig.end()))), version);	
+    else return toBase58Check(ripemd160(sha256(uchar_vector(scriptSig.begin() + pubkeyBegin, scriptSig.end()))), version);
 }
 
 string TxIn::toString() const
@@ -1308,12 +1308,12 @@ string TxOut::getAddress() const
     boost::regex rx_pubKeyShort("21([0-9a-fA-F]{66})ac");
     if (boost::regex_search(scriptPubKeyHex, publicKey, rx_pubKeyShort))
         return toBase58Check(mdsha(uchar_vector(publicKey[1])), g_addressVersion);
-	
+
     // multisig transaction using hash
     boost::regex rx_multiSigHash("a914([0-9a-fA-F]{40})87");
     if (boost::regex_search(scriptPubKeyHex, publicKey, rx_multiSigHash))
         return toBase58Check(uchar_vector(publicKey[1]), g_multiSigAddressVersion);
-	
+
     // nonstandard
     return "";
 }
@@ -1610,6 +1610,10 @@ uchar_vector Transaction::getSigHash(uint32_t hashType, uint index, const uchar_
     if (index >= inputs.size())
         throw runtime_error("Index out of range.");
 
+    // Make sure this sighash algorithm is only used for Bitcoin transactions
+    if ((hashType & SIGHASH_FORKID) == SIGHASH_FORKID)
+        throw runtime_error("Unsupported hash type.");
+
     // TODO: Add other hashtype support
     if (hashType != SIGHASH_ALL)
         throw runtime_error("Unsupported hash type.");
@@ -1737,7 +1741,7 @@ const BigInt CoinBlockHeader::getTarget() const
     {
         BigInt target(nMantissa);
         return target << (8*(nExp - 3));
-    }    
+    }
 }
 
 void CoinBlockHeader::setTarget(const BigInt& target)
@@ -1805,7 +1809,7 @@ const uchar_vector& CoinBlockHeader::getHash() const
         hashLittleEndian_ = hash_.getReverse();
         isHashSet_ = true;
     }
-    return hash_; 
+    return hash_;
 }
 
 const uchar_vector& CoinBlockHeader::getHashLittleEndian() const
@@ -1816,7 +1820,7 @@ const uchar_vector& CoinBlockHeader::getHashLittleEndian() const
         hashLittleEndian_ = hash_.getReverse();
         isHashSet_ = true;
     }
-    return hashLittleEndian_; 
+    return hashLittleEndian_;
 }
 
 const uchar_vector& CoinBlockHeader::getPOWHash() const
@@ -1827,7 +1831,7 @@ const uchar_vector& CoinBlockHeader::getPOWHash() const
         POWHashLittleEndian_ = POWHash_.getReverse();
         isPOWHashSet_ = true;
     }
-    return POWHash_; 
+    return POWHash_;
 }
 
 const uchar_vector& CoinBlockHeader::getPOWHashLittleEndian() const
@@ -1838,7 +1842,7 @@ const uchar_vector& CoinBlockHeader::getPOWHashLittleEndian() const
         POWHashLittleEndian_ = POWHash_.getReverse();
         isPOWHashSet_ = true;
     }
-    return POWHashLittleEndian_; 
+    return POWHashLittleEndian_;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2031,7 +2035,7 @@ void MerkleBlock::setSerialized(const uchar_vector& bytes)
     for (uint i = 0; i < nHashes.value; i++) {
         hashes.push_back(uchar_vector(bytes.begin() + pos, bytes.begin() + pos + 32)); pos += 32;
     }
-        
+
     VarInt nFlags(uchar_vector(bytes.begin() + pos, bytes.end())); pos += nFlags.getSize();
     if (bytes.size() < pos + nFlags.value)
         throw runtime_error("Invalid data - MerkleBlock flag count invalid.");
@@ -2150,7 +2154,7 @@ string HeadersMessage::toIndentedString(uint spaces) const
 //
 uint64_t FilterLoadMessage::getSize() const
 {
-    return VarInt(filter.size()).getSize() + filter.size() + 9; 
+    return VarInt(filter.size()).getSize() + filter.size() + 9;
 }
 
 uchar_vector FilterLoadMessage::getSerialized() const
@@ -2179,7 +2183,7 @@ void FilterLoadMessage::setSerialized(const uchar_vector& bytes)
     filter.assign(bytes.begin() + filterSizeLength, bytes.begin() + pos);
     nHashFuncs = vch_to_uint<uint32_t>(uchar_vector(bytes.begin() + pos, bytes.begin() + pos + 4), LITTLE_ENDIAN_); pos += 4;
     nTweak = vch_to_uint<uint32_t>(uchar_vector(bytes.begin() + pos, bytes.begin() + pos + 4), LITTLE_ENDIAN_); pos += 4;
-    nFlags = (uint8_t)bytes[pos]; 
+    nFlags = (uint8_t)bytes[pos];
 }
 
 std::string FilterLoadMessage::toString() const
@@ -2281,4 +2285,3 @@ std::string PongMessage::toIndentedString(uint spaces) const
 {
     return "";
 }
-

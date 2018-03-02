@@ -3,7 +3,7 @@
 
 The core crypto library ported from [mSIGNA](https://github.com/ciphrex/mSIGNA) for managing bitcoin data structures.
 
-conan package name: `CoinCore/0.1.2@joystream/stable`
+conan package name: `CoinCore/0.2.0@joystream/stable`
 
 ### Dependencies
 

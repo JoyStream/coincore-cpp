@@ -3,24 +3,11 @@
 // MerkleTree.cpp
 //
 // Copyright (c) 2011-2012 Eric Lombrozo
+// Copyright (c) 2011-2016 Ciphrex Corp.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Distributed under the MIT software license, see the accompanying
+// file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 //
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 
 #include "MerkleTree.h"
 
@@ -78,7 +65,7 @@ std::string PartialMerkleTree::toIndentedString(bool showIndices) const
     ss << "merkleHashes: " << std::endl;
     unsigned int i = 0;
     for (auto& hash: merkleHashes_) {
-        ss << "  " << i++ << ": " << uchar_vector(hash).getReverse().getHex() << std::endl;
+        ss << "  " << i++ << ": " << uchar_vector(hash).getReverse().getHex() << std::endl; 
     }
 
     ss << "txHashes: " << std::endl;
@@ -119,7 +106,7 @@ void PartialMerkleTree::setCompressed(unsigned int nTxs, const std::vector<uchar
     std::queue<uchar_vector> hashQueue;
     for (auto& hash: hashes) { hashQueue.push(hash); }
 
-    std::queue<bool> bitQueue;
+    std::queue<bool> bitQueue; 
     for (auto& flag: flags) {
         for (unsigned int i = 0; i < 8; i++) {
             bool bit = ((flag >> i) & (unsigned char)0x01);
@@ -254,7 +241,7 @@ void PartialMerkleTree::setUncompressed(const std::vector<MerkleLeaf>& leaves, s
         merkleHashes_.clear();
         merkleHashes_.push_front(root_);
         bits_.clear();
-        bits_.push_front(false);
+        bits_.push_front(false);     
     }
     else {
         bits_.push_front(true);
@@ -384,7 +371,7 @@ void PartialMerkleTree::merge(std::queue<uchar_vector>& hashQueue1, std::queue<u
     {
         std::stringstream error;
         error << "PartialMerkleTree::merge - inner nodes do not match: " << root.getHex() << ", " << hashQueue2.front().getReverse().getHex();
-
+        
         throw std::runtime_error(error.str());
     }
 
@@ -402,7 +389,7 @@ uchar_vector PartialMerkleTree::getFlags() const
         if (byteCounter == 8) {
             flags.push_back(byte);
             byteCounter = 0;
-            byte = 0;
+            byte = 0;            
         }
         if (bit) byte |= ((unsigned char)1 << byteCounter);
         byteCounter++;
@@ -419,7 +406,7 @@ void PartialMerkleTree::updateTxIndices()
     unsigned int i = 0;
     for (auto& hash: merkleHashes_)
     {
-        if (txHashesSet.count(hash)) { txIndices_.push_back(i); }
+        if (txHashesSet.count(hash)) { txIndices_.push_back(i); } 
         i++;
     }
 }
@@ -440,6 +427,6 @@ PartialMerkleTree Coin::randomPartialMerkleTree(const std::vector<uchar_vector>&
 
     PartialMerkleTree tree;
     tree.setUncompressed(leaves);
-    return tree;
+    return tree;    
 }
 

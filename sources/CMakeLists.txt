@@ -26,7 +26,6 @@ set(
     src/MerkleTree
     src/secp256k1_openssl
     src/aes
-    src/StandardTransactions
 )
 
 set(
